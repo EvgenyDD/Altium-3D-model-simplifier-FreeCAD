@@ -1,0 +1,24 @@
+from __future__ import unicode_literals
+import FreeCAD
+import FreeCADGui
+
+
+def find(fun, lst):
+    return next((x for x in lst if fun(x)), None)
+
+group_name = "Assembly_sorted"
+
+group = App.ActiveDocument.getObject(group_name)
+if group is None:
+    group = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", group_name)
+
+selEx = FreeCADGui.Selection.getSelectionEx()
+objs = [selobj.Object for selobj in selEx]
+
+objs.sort(key=lambda x: x.Label, reverse=False)  # sort by label (sort is buggy, gives C19, C20, C2, C20)
+
+if find(lambda x: x.Label.lower() == 'board', objs) is not None:
+    objs.insert(0, objs.pop(objs.index(find(lambda x: x.Label.lower() == 'board', objs))))  # board obj is first
+
+for o in objs:
+    group.addObject(o)

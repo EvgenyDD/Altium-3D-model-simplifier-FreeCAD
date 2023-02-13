@@ -1,0 +1,105 @@
+from __future__ import unicode_literals
+import FreeCAD
+import FreeCADGui
+import math
+
+selEx = FreeCADGui.Selection.getSelectionEx()
+objs = [selobj.Object for selobj in selEx]
+
+color_list = {
+"c": [208,211,212], #white
+
+"r": [39,174,96], #green
+
+"l": [160,64,0], #brick
+"t": [160,64,0],
+
+"f": [142,68,173], #purple
+
+"q": [243,156,18], #orange
+"d": [241,196,15], #yellow
+"u": [50,120,255],
+
+"x": [23,165,137], #light green
+"m": [127,140,141],
+"p": [128,128,0], #olive
+}
+
+group_name = "Assembly_simple"
+
+group = FreeCAD.ActiveDocument.getObject(group_name)
+if group is None:
+    group = FreeCAD.ActiveDocument.addObject("App::DocumentObjectGroup", group_name)
+
+if len(objs) >= 1:
+    for o in objs:
+        if hasattr(o, "Shape"):
+            s = o.Shape
+        elif hasattr(o, "Mesh"):
+            s = o.Mesh
+        elif hasattr(o, "Points"):
+            s = o.Points
+
+        try:
+            red = 0.562  # 1.0 = 255
+            green = 0.562  #
+            blue = 0.562  #
+
+            if all(test in color_list for test in o.Label[0].lower()):
+                red, green, blue = color_list[o.Label[0].lower()]
+                red = red / 255.0
+                green = green / 255.0
+                blue = blue / 255.0
+
+            min_angle = 0
+            min_area = s.BoundBox.XLength * s.BoundBox.YLength
+            min_bb = s.BoundBox
+            for i in range(0, 91):
+                s.Placement = FreeCAD.Placement(FreeCAD.Vector(0, 0, 0), FreeCAD.Vector(0, 0, 1), i)
+                area = s.BoundBox.XLength * s.BoundBox.YLength
+                if area < min_area:
+                    min_area = area
+                    min_angle = i
+                    min_bb = s.BoundBox
+
+            bb_len_X = min_bb.XLength
+            bb_len_Y = min_bb.YLength
+            bb_len_Z = min_bb.ZLength
+            nameLabel = o.Label
+
+            try:
+                import unicodedata
+                nameLabel = str(unicodedata.normalize('NFKD', nameLabel).encode('ascii', 'ignore'))[2:]
+            except Exception:
+                None
+
+            if (bb_len_X > 0) and (bb_len_Y > 0) and (bb_len_Z > 0):  # Create Volume
+                BDvol = FreeCAD.ActiveDocument.addObject("Part::Box", nameLabel + "_vol")
+                BDvol.Length.Value = bb_len_X
+                BDvol.Width.Value = bb_len_Y
+                BDvol.Height.Value = bb_len_Z
+                sa = math.sin(min_angle / 180 * math.pi)
+                ca = math.cos(min_angle / 180 * math.pi)
+                # inverse rotz matrix
+                BDvol.Placement = FreeCAD.Placement(FreeCAD.Vector((-sa * sa / ca + 1 / ca) * min_bb.XMin + sa * min_bb.YMin,
+                                                               -sa * min_bb.XMin + ca * min_bb.YMin,
+                                                               min_bb.ZMin),
+                                                    FreeCAD.Rotation(FreeCAD.Vector(0, 0, 1), -min_angle))
+                BDPl = BDvol.Placement
+                FreeCADGui.ActiveDocument.getObject(BDvol.Name).LineColor = (red, green, blue)
+                FreeCADGui.ActiveDocument.getObject(BDvol.Name).PointColor = (red, green, blue)
+                FreeCADGui.ActiveDocument.getObject(BDvol.Name).ShapeColor = (red, green, blue)
+                FreeCADGui.ActiveDocument.getObject(BDvol.Name).Transparency = 0
+                group.addObject(FreeCAD.ActiveDocument.getObject(BDvol.Name))
+                for o in FreeCAD.ActiveDocument.getObjectsByLabel(o.Label):
+                    o.ViewObject.Visibility = False
+            else:
+                FreeCAD.Console.PrintMessage("ERROR! Not Volume BoundBox possible " + nameLabel + " \r\n")
+            
+        except Exception as e:
+            FreeCAD.Console.PrintError("Bad selection" + str(e) + "\n")
+
+    FreeCAD.ActiveDocument.recompute()
+
+else:
+    FreeCAD.Console.PrintMessage("ERROR! Select an object !"+"\n")
